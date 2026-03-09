@@ -1,42 +1,116 @@
-# ArogyaSatya: Agentic AI for Healthcare Misinformation Verification
+# ArogyaSatya
 
-ArogyaSatya is a multi-agent system that verifies healthcare claims from text, images, and videos with evidence-backed reasoning.  
-It is designed for Agentic AI hackathons: explicit orchestration, specialized agents, tool use, and explainable outcomes.
+Agentic AI platform for healthcare misinformation detection, verification, and explainable reporting across text, images, and video transcripts.
 
-## Why This Is Agentic AI
+## Overview
 
-- Uses a `LangGraph` state machine, not a single prompt-response call.
-- Splits work into specialized agents with clear responsibilities.
-- Applies conditional routing (safety gate, no-claim fast path, multimodal branches).
-- Uses tool-augmented retrieval (web + PubMed + vector memory) before verdicts.
-- Produces claim-level outputs with evidence and an explainer layer.
+ArogyaSatya uses a coordinated multi-agent workflow (LangGraph) to transform raw content into claim-level verdicts backed by evidence.  
+The system is designed for high-trust use cases: safety-gated execution, retrieval grounding, canonical claim memory, and transparent explanations.
 
-## Project Blueprint And Diagrams
+## Key Features
 
-- Blueprint: [docs/AGENTIC_BLUEPRINT.md](docs/AGENTIC_BLUEPRINT.md)
-- Architecture and flow diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Multi-agent orchestration (`LangGraph`) with conditional control flow
+- Multimodal analysis (text, image, video transcript)
+- Evidence retrieval from trusted sources + PubMed augmentation
+- Canonical claim deduplication with vector memory (`ChromaDB`)
+- Trend clustering for recurring misinformation narratives
+- Dashboard-first UX with operational status and quick analysis actions
 
-## Core Capabilities
+## Why Agentic (vs Single LLM)
 
-- Multi-agent claim verification pipeline
-- Multimodal input support (text, image, video transcript)
-- Canonical claim memory (vector deduplication)
-- Trend analysis for repeated misinformation narratives
-- FastAPI backend + Next.js frontend
+| Dimension | Single LLM Call | ArogyaSatya Agentic Pipeline |
+|---|---|---|
+| Reasoning structure | Opaque, monolithic | Explicit state graph with specialized agents |
+| Safety handling | Prompt-dependent | Dedicated safety gate with controlled short-circuit |
+| Grounding | Often weak/citation-light | Retrieval + PubMed + evidence fusion |
+| Repeatability | Variable | Deterministic flow and node contracts |
+| Memory | Session-local | SQL + vector memory for continuity |
+| Explainability | Generic summary | Claim-level verdicts with rationale |
 
-## Repository Layout
+## System Architecture
 
-- `app/agents/` agent implementations and graph orchestration
-- `app/api/` REST endpoints
-- `app/db/` SQLAlchemy models and DB session setup
-- `app/core/` config, cleanup, caching, trends
+```mermaid
+flowchart LR
+    U([User]) --> FE[Next.js Frontend]
+    FE --> API[FastAPI Gateway]
+    API --> ORCH[LangGraph Orchestrator]
+
+    ORCH --> VP[Video Processor]
+    ORCH --> SM[Safety Monitor]
+    ORCH --> CE[Claim Extraction]
+    ORCH --> VLM[VLM Agent]
+    ORCH --> CAN[Canonicalization]
+    ORCH --> RET[Evidence Retrieval]
+    ORCH --> PUB[PubMed Agent]
+    ORCH --> VER[Verification]
+    ORCH --> EXP[Explainer]
+
+    API <--> SQL[(SQL DB)]
+    CAN <--> VDB[(Chroma Vector DB)]
+    CE <--> LLM[Groq LLM]
+    VER <--> LLM
+    EXP <--> LLM
+    RET <--> WEB[(Trusted Web Sources)]
+    PUB <--> WEB
+    VP <--> LOCAL[(Whisper/Moondream)]
+    VLM <--> LOCAL
+```
+
+## Execution Flow
+
+```mermaid
+flowchart TD
+    S([Input]) --> VP[video_processor]
+    VP --> SM[safety_monitor]
+    SM --> SAFE{is_safe?}
+    SAFE -- No --> EXP[explainer]
+    SAFE -- Yes --> CE[claim_extraction]
+    CE --> CLAIMS{claims_found?}
+    CLAIMS -- No --> EXP
+    CLAIMS -- Yes --> VLM[vlm_analysis]
+    VLM --> CAN[canonicalization]
+    CAN --> RET[evidence_retrieval]
+    RET --> PUB[pubmed_search]
+    PUB --> VER[verification]
+    VER --> EXP
+    EXP --> E([Final report + verdicts])
+```
+
+For full research-style diagrams:
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- [diagrams/arogyasatya-phd-flow-diagram.mmd](diagrams/arogyasatya-phd-flow-diagram.mmd)
+- [diagrams/arogyasatya-phd-system-flowchart.mmd](diagrams/arogyasatya-phd-system-flowchart.mmd)
+
+## Tech Stack
+
+- Frontend: Next.js, TypeScript, Tailwind
+- Backend: FastAPI, SQLAlchemy (async)
+- Orchestration: LangGraph, LangChain
+- Data: SQLite/PostgreSQL, ChromaDB
+- Models: Groq LLM + local Whisper/VLM components
+
+## Repository Structure
+
+- `app/agents/` agent nodes and graph orchestration
+- `app/api/` API endpoints
+- `app/core/` config, caching, trends, cleanup
+- `app/db/` models and database setup
 - `app/scrapers/` ingestion connectors
-- `app/` (Next.js app router files) + `components/` UI
-- `docs/` architecture and hackathon blueprint
+- `app/dashboard/` dashboard page
+- `components/` reusable frontend UI
+- `docs/` blueprint and architecture docs
+- `diagrams/` editable Mermaid/Draw.io diagrams
+- `submissions/` prework and presentation assets
 
-## Quick Start
+## Run Locally
 
-### 1) Backend setup
+### Prerequisites
+
+- Python 3.10+
+- Node.js 18+
+- `ffmpeg` (recommended for video transcription path)
+
+### 1) Backend
 
 ```bash
 python -m venv .venv
@@ -45,49 +119,67 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-Set `GROQ_API_KEY` in `.env`.
-
-Run backend:
+Set `GROQ_API_KEY` in `.env`, then run:
 
 ```bash
-uvicorn app.main:app --reload --port 8000
+python -m uvicorn app.main:app --host 127.0.0.1 --port 9000
 ```
 
-### 2) Frontend setup
+Health check:
+
+```bash
+http://127.0.0.1:9000/api/health
+```
+
+### 2) Frontend
 
 ```bash
 npm install --legacy-peer-deps
-# Optional: set explicitly if backend runs on non-default port
-# PowerShell:
-# $env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:9000"
+```
+
+PowerShell (point frontend to backend):
+
+```powershell
+$env:NEXT_PUBLIC_API_BASE_URL="http://127.0.0.1:9000"
 npm run dev
 ```
 
-Frontend: `http://localhost:3000`  
-Backend API: `http://localhost:8000`
+Open:
+- Frontend: `http://127.0.0.1:3000`
+- Dashboard: `http://127.0.0.1:3000/dashboard`
 
-## API Endpoints
+## API Reference
 
-- `GET /api/health`
-- `POST /api/trigger-scan`
-- `GET /api/articles`
-- `POST /api/analyze/{id}`
-- `POST /api/analyze-text`
-- `GET /api/trends`
+- `GET /api/health` service health
+- `POST /api/trigger-scan` run source ingestion
+- `GET /api/articles` list latest ingested content
+- `POST /api/analyze/{id}` analyze stored article/content
+- `POST /api/analyze-text` analyze raw text payload
+- `GET /api/trends` return trend clusters
 
-## Environment Variables
+## Configuration
 
-Use [`.env.example`](.env.example) as template:
+Use [`.env.example`](.env.example) as base.
 
-- `DATABASE_URL`
-- `GROQ_API_KEY`
-- `FRONTEND_ORIGINS`
-- `ENABLE_SQL_ECHO`
+- `DATABASE_URL` SQL DB connection (default local SQLite)
+- `GROQ_API_KEY` LLM key
+- `FRONTEND_ORIGINS` comma-separated CORS origins
+- `ENABLE_SQL_ECHO` SQL debug logs (`true/false`)
 
-## Hackathon Demo Flow
+## Professional Notes
 
-1. Ingest article or paste a viral claim.
-2. Trigger analysis and show stepwise agent outputs.
-3. Highlight evidence-backed verdicts and explanation.
-4. Show trend clustering for repeated narratives.
-5. Conclude with reliability + speed metrics.
+- Runtime DB files are local artifacts and should not be treated as source of truth.
+- Diagram sources are editable and versioned under `diagrams/`.
+- Submission materials are under `submissions/ai-learning-labs-round1/`.
+
+## Troubleshooting
+
+- If icon/dashboard requests fail after branch switches, restart frontend and clear stale build output:
+  - stop dev server
+  - delete `.next/`
+  - run `npm run dev` again
+- If backend port is blocked on Windows, switch to another free port (for example `9000`).
+
+## License
+
+MIT
