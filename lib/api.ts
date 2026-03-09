@@ -1,5 +1,14 @@
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const ENV_API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+const API_BASE_CANDIDATES = [
+  ENV_API_BASE,
+  "http://127.0.0.1:9000",
+  "http://localhost:9000",
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+].filter((url): url is string => Boolean(url));
+
+const REQUEST_TIMEOUT_MS = 15000;
+let lastHealthyBaseUrl: string | null = ENV_API_BASE ?? null;
 
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -9,6 +18,59 @@ async function handleResponse<T>(res: Response): Promise<T> {
     );
   }
   return (await res.json()) as T;
+}
+
+function withTimeout(signal?: AbortSignal) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  if (signal) {
+    signal.addEventListener("abort", () => controller.abort(), { once: true });
+  }
+
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeoutId),
+  };
+}
+
+async function requestWithFallback<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const preferred = [
+    ...(lastHealthyBaseUrl ? [lastHealthyBaseUrl] : []),
+    ...API_BASE_CANDIDATES.filter((url) => url !== lastHealthyBaseUrl),
+  ];
+
+  let lastError: unknown = null;
+
+  for (const baseUrl of preferred) {
+    const timeout = withTimeout(init?.signal);
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        ...init,
+        signal: timeout.signal,
+      });
+      const data = await handleResponse<T>(res);
+      lastHealthyBaseUrl = baseUrl;
+      return data;
+    } catch (err) {
+      lastError = err;
+    } finally {
+      timeout.clear();
+    }
+  }
+
+  throw new Error(
+    `Unable to reach backend API. Tried: ${preferred.join(", ")}. Last error: ${
+      lastError instanceof Error ? lastError.message : String(lastError)
+    }`,
+  );
+}
+
+export function getCurrentApiBaseUrl(): string {
+  return lastHealthyBaseUrl ?? API_BASE_CANDIDATES[0] ?? "unresolved";
 }
 
 export type AnalyzeTextResult = {
@@ -30,15 +92,13 @@ export type AnalyzeTextResult = {
 };
 
 export async function analyzeTextApi(text: string): Promise<AnalyzeTextResult> {
-  const res = await fetch(`${API_BASE_URL}/api/analyze-text`, {
+  return requestWithFallback<AnalyzeTextResult>("/api/analyze-text", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ text }),
   });
-
-  return handleResponse<AnalyzeTextResult>(res);
 }
 
 export type TrendCluster = {
@@ -48,11 +108,9 @@ export type TrendCluster = {
 };
 
 export async function getTrendsApi(): Promise<TrendCluster[]> {
-  const res = await fetch(`${API_BASE_URL}/api/trends`, {
+  return requestWithFallback<TrendCluster[]>("/api/trends", {
     method: "GET",
   });
-
-  return handleResponse<TrendCluster[]>(res);
 }
 
 export type RawArticle = {
@@ -67,26 +125,29 @@ export type RawArticle = {
 };
 
 export async function getArticlesApi(): Promise<RawArticle[]> {
-  const res = await fetch(`${API_BASE_URL}/api/articles`, {
+  return requestWithFallback<RawArticle[]>("/api/articles", {
     method: "GET",
   });
-  return handleResponse<RawArticle[]>(res);
 }
 
 export async function triggerScanApi(): Promise<{ status: string }> {
-  const res = await fetch(`${API_BASE_URL}/api/trigger-scan`, {
+  return requestWithFallback<{ status: string }>("/api/trigger-scan", {
     method: "POST",
   });
-  return handleResponse<{ status: string }>(res);
 }
 
 export async function analyzeArticleApi(
   contentId: number,
 ): Promise<AnalyzeTextResult> {
-  const res = await fetch(`${API_BASE_URL}/api/analyze/${contentId}`, {
+  return requestWithFallback<AnalyzeTextResult>(`/api/analyze/${contentId}`, {
     method: "POST",
   });
-  return handleResponse<AnalyzeTextResult>(res);
+}
+
+export async function healthCheckApi(): Promise<{ status: string }> {
+  return requestWithFallback<{ status: string }>("/api/health", {
+    method: "GET",
+  });
 }
 
 

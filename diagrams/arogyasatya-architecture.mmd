@@ -1,0 +1,58 @@
+flowchart LR
+    user([User / Judge])
+
+    subgraph client["Client Layer"]
+        fe["Next.js Frontend\n(app/, components/)"]
+    end
+
+    subgraph platform["Application Layer"]
+        api["FastAPI API\n(app/main.py, app/api/endpoints.py)"]
+        orch["LangGraph Orchestrator\n(app/agents/agent_graph.py)"]
+    end
+
+    subgraph agents["Agent Runtime"]
+        vp["Video Processor Agent"]
+        sm["Safety Monitor Agent"]
+        ce["Claim Extraction Agent"]
+        vlm["Vision-Language Agent"]
+        can["Canonicalization Agent"]
+        er["Evidence Retrieval Agent"]
+        pub["PubMed Agent"]
+        ver["Verification Agent"]
+        exp["Explainer Agent"]
+    end
+
+    subgraph storage["State + Memory"]
+        sql[("SQL DB\n(raw_content, canonical_claims, claim_evidence)")]
+        vdb[("Chroma Vector DB\n(claim embeddings)")]
+    end
+
+    subgraph external["External Intelligence"]
+        groq["Groq LLM API"]
+        trusted["Trusted Web Sources\n(CDC/WHO/PubMed/News)"]
+        local["Local Models\n(Whisper, Moondream)"]
+    end
+
+    user --> fe --> api --> orch
+    api <--> sql
+
+    orch --> vp --> sm --> ce --> vlm --> can --> er --> pub --> ver --> exp
+
+    can <--> vdb
+    ce <--> groq
+    ver <--> groq
+    exp <--> groq
+    er <--> trusted
+    pub <--> trusted
+    vp <--> local
+    vlm <--> local
+
+    classDef layer fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px;
+    classDef core fill:#ecfeff,stroke:#0891b2,color:#164e63,stroke-width:1px;
+    classDef data fill:#ecfdf5,stroke:#16a34a,color:#14532d,stroke-width:1px;
+    classDef ext fill:#fff7ed,stroke:#ea580c,color:#9a3412,stroke-width:1px;
+
+    class fe,api,orch core;
+    class vp,sm,ce,vlm,can,er,pub,ver,exp layer;
+    class sql,vdb data;
+    class groq,trusted,local ext;

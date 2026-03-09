@@ -4,8 +4,10 @@ import { useEffect, useState, useRef } from "react"
 import {
   analyzeArticleApi,
   analyzeTextApi,
+  getCurrentApiBaseUrl,
   getArticlesApi,
   getTrendsApi,
+  healthCheckApi,
   triggerScanApi,
   type AnalyzeTextResult,
   type RawArticle,
@@ -54,6 +56,11 @@ function renderReportContent(report: string) {
 }
 
 export default function DashboardPage() {
+  const [backendStatus, setBackendStatus] = useState<
+    "checking" | "online" | "offline"
+  >("checking")
+  const [backendMessage, setBackendMessage] = useState<string>("Checking API")
+
   const [scanLoading, setScanLoading] = useState(false)
   const [scanMessage, setScanMessage] = useState<string | null>(null)
 
@@ -83,13 +90,19 @@ export default function DashboardPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        setBackendStatus("checking")
+        await healthCheckApi()
+        setBackendStatus("online")
+        setBackendMessage(`Connected: ${getCurrentApiBaseUrl()}`)
+
         setTrendsLoading(true)
         setArticlesLoading(true)
         const [t, a] = await Promise.all([getTrendsApi(), getArticlesApi()])
-        setTrends(t)
-        setArticles(a)
+        setTrends(Array.isArray(t) ? t : [])
+        setArticles(Array.isArray(a) ? a : [])
       } catch (e) {
-        // Ignore for now; sections will just appear empty
+        setBackendStatus("offline")
+        setBackendMessage((e as Error).message || "Backend unavailable")
         console.error(e)
       } finally {
         setTrendsLoading(false)
@@ -103,7 +116,7 @@ export default function DashboardPage() {
     try {
       setTrendsLoading(true)
       const updated = await getTrendsApi()
-      setTrends(updated)
+      setTrends(Array.isArray(updated) ? updated : [])
     } catch (e) {
       console.error("Failed to refresh trends:", e)
     } finally {
@@ -122,8 +135,8 @@ export default function DashboardPage() {
         getArticlesApi(),
         getTrendsApi(),
       ])
-      setArticles(updatedArticles)
-      setTrends(updatedTrends)
+      setArticles(Array.isArray(updatedArticles) ? updatedArticles : [])
+      setTrends(Array.isArray(updatedTrends) ? updatedTrends : [])
     } catch (e) {
       setScanMessage((e as Error).message || "Failed to trigger scan")
     } finally {
@@ -198,6 +211,18 @@ export default function DashboardPage() {
             <p className="text-sm text-zinc-400">
               AI-Powered Healthcare Misinformation Detector
             </p>
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                className={`inline-flex h-2.5 w-2.5 rounded-full ${
+                  backendStatus === "online"
+                    ? "bg-emerald-400"
+                    : backendStatus === "checking"
+                      ? "bg-amber-400"
+                      : "bg-red-400"
+                }`}
+              />
+              <p className="text-xs text-zinc-500">{backendMessage}</p>
+            </div>
           </div>
           <div className="flex flex-col items-end gap-2">
             <Button
@@ -285,6 +310,30 @@ export default function DashboardPage() {
 
         {/* Trending + Articles */}
         <div className="grid gap-6 lg:grid-cols-[2fr,3fr]">
+          <Card className="border-zinc-800 bg-zinc-950 px-6 py-5 lg:col-span-2">
+            <h2 className="text-xl font-semibold text-white">Quick Actions</h2>
+            <p className="mt-1 text-sm text-zinc-400">
+              Run demo narratives instantly and validate end-to-end flow.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {[
+                "5G towers spread coronavirus",
+                "Garlic water cures viral infections",
+                "Vaccines cause infertility",
+              ].map((sample) => (
+                <button
+                  key={sample}
+                  type="button"
+                  onClick={() => handleAnalyzeText(sample, sample)}
+                  disabled={textLoading}
+                  className="rounded-full border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs text-blue-200 transition-colors hover:bg-blue-500/20 hover:border-blue-400/60"
+                >
+                  {sample}
+                </button>
+              ))}
+            </div>
+          </Card>
+
           <Card className="border-zinc-800 bg-zinc-950 px-6 py-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-white">

@@ -34,3 +34,6 @@ venv/
 chroma_db/
 *.sqlite3
 *.db
+
+# Office temp files
+~$*.pptx

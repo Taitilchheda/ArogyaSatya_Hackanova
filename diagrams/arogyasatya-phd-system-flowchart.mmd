@@ -1,0 +1,88 @@
+flowchart LR
+    %% ==================================================
+    %% ArogyaSatya: Research-Style System Flowchart
+    %% Control Plane + Data Plane + Inference Plane
+    %% ==================================================
+
+    subgraph L0["Human Interaction Layer"]
+        U[End User / Analyst / Judge]
+        UI[Next.js Interface<br/>interactive analysis + dashboard]
+    end
+
+    subgraph L1["API and Orchestration Layer (Control Plane)"]
+        API[FastAPI Gateway<br/>request validation + endpoint routing]
+        ORCH[LangGraph Runtime<br/>stateful multi-agent orchestration]
+        POL[Safety and Policy Controller<br/>pre/post execution guardrails]
+    end
+
+    subgraph L2["Agentic Inference Layer (Reasoning Plane)"]
+        VP[Video Processor Agent]
+        VLM[VLM Agent]
+        CE[Claim Extraction Agent]
+        CAN[Canonicalization Agent]
+        RET[Evidence Retrieval Agent]
+        PUB[PubMed Agent]
+        VER[Verification Agent]
+        EXP[Explainer Agent]
+    end
+
+    subgraph L3["Knowledge and Persistence Layer (Data Plane)"]
+        SQL[(Relational Store<br/>content + claims + evidence)]
+        VEC[(Vector Memory<br/>semantic claim space)]
+        CACHE[(Inference Cache<br/>latency/cost optimization)]
+        TREND[Trend Analyzer<br/>temporal misinformation clusters]
+    end
+
+    subgraph L4["External Model and Evidence Substrate"]
+        LLM[Groq-hosted LLM]
+        WEB[Trusted Web Corpus<br/>CDC / WHO / major publishers]
+        BIOMED[Biomedical Corpus<br/>PubMed / literature]
+        LOCAL[Local Runtime Models<br/>Whisper + Moondream]
+    end
+
+    %% User/API path
+    U --> UI --> API --> ORCH
+    API <--> POL
+
+    %% Orchestrated agent path
+    ORCH --> VP --> CE
+    ORCH --> VLM --> CE
+    ORCH --> CE --> CAN --> RET --> PUB --> VER --> EXP
+
+    %% Control injections
+    POL -. safety signal .-> ORCH
+    POL -. output moderation .-> EXP
+
+    %% Data plane interactions
+    API <--> SQL
+    CAN <--> VEC
+    CE <--> CACHE
+    VER <--> CACHE
+    SQL --> TREND
+    VEC --> TREND
+    TREND -. narrative priors .-> RET
+
+    %% External evidence/model interactions
+    CE <--> LLM
+    VER <--> LLM
+    EXP <--> LLM
+    VP <--> LOCAL
+    VLM <--> LOCAL
+    RET <--> WEB
+    PUB <--> BIOMED
+
+    %% Final response path
+    EXP --> API --> UI --> U
+
+    %% Styles
+    classDef layer fill:#f8fafc,stroke:#64748b,color:#0f172a,stroke-width:1px;
+    classDef control fill:#eef2ff,stroke:#4338ca,color:#1e1b4b,stroke-width:1px;
+    classDef agent fill:#fff7ed,stroke:#c2410c,color:#7c2d12,stroke-width:1px;
+    classDef data fill:#ecfdf5,stroke:#166534,color:#14532d,stroke-width:1px;
+    classDef ext fill:#fdf4ff,stroke:#a21caf,color:#581c87,stroke-width:1px;
+
+    class U,UI layer;
+    class API,ORCH,POL control;
+    class VP,VLM,CE,CAN,RET,PUB,VER,EXP agent;
+    class SQL,VEC,CACHE,TREND data;
+    class LLM,WEB,BIOMED,LOCAL ext;

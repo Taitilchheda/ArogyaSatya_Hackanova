@@ -5,6 +5,7 @@ import { motion } from "framer-motion"
 import Link from "next/link"
 import { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { usePathname } from "next/navigation"
 
 interface NavItem {
   name: string
@@ -20,6 +21,7 @@ interface NavBarProps {
 export function NavBar({ items, className }: NavBarProps) {
   const [activeTab, setActiveTab] = useState(items[0].name)
   const [isMobile, setIsMobile] = useState(false)
+  const pathname = usePathname()
 
   useEffect(() => {
     const handleResize = () => {
@@ -32,13 +34,24 @@ export function NavBar({ items, className }: NavBarProps) {
   }, [])
 
   useEffect(() => {
+    const getHashId = (url: string) => {
+      const hashIndex = url.indexOf("#")
+      return hashIndex >= 0 ? url.slice(hashIndex + 1) : ""
+    }
+
     const handleScroll = () => {
-      const sections = items.map(item => document.getElementById(item.url.substring(1))).filter(Boolean) as HTMLElement[]
+      if (pathname !== "/") return
+
+      const sections = items
+        .map((item) => getHashId(item.url))
+        .filter(Boolean)
+        .map((id) => document.getElementById(id))
+        .filter(Boolean) as HTMLElement[]
       const scrollPosition = window.scrollY + window.innerHeight / 2
 
       for (const section of sections) {
         if (scrollPosition >= section.offsetTop && scrollPosition < section.offsetTop + section.offsetHeight) {
-          const correspondingNavItem = items.find(item => `#${section.id}` === item.url)
+          const correspondingNavItem = items.find((item) => getHashId(item.url) === section.id)
           if (correspondingNavItem) {
             setActiveTab(correspondingNavItem.name)
             break
@@ -49,12 +62,24 @@ export function NavBar({ items, className }: NavBarProps) {
 
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
-  }, [items])
+  }, [items, pathname])
+
+  useEffect(() => {
+    const matched = items.find((item) => {
+      const targetPath = item.url.split("#")[0] || "/"
+      return targetPath === pathname
+    })
+    if (matched) {
+      setActiveTab(matched.name)
+    }
+  }, [items, pathname])
 
   const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, url: string) => {
-    if (url.startsWith("#")) {
+    if (url.includes("#")) {
+      const [targetPath, hash] = url.split("#")
+      if (targetPath && targetPath !== pathname) return
       e.preventDefault()
-      const targetId = url.substring(1)
+      const targetId = hash
       const targetElement = document.getElementById(targetId)
 
       if (targetElement) {
@@ -62,7 +87,7 @@ export function NavBar({ items, className }: NavBarProps) {
           top: targetElement.offsetTop,
           behavior: "smooth",
         })
-      } else if (url === "#") {
+      } else if (!targetId) {
         window.scrollTo({ top: 0, behavior: "smooth" })
       }
     }

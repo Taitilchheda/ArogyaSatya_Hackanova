@@ -3,13 +3,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.api import endpoints
 from app.db.database import init_db
+from app.core.config import settings
 
-app = FastAPI(title="Healthcare Misinformation Detector", version="1.0.0")
+app = FastAPI(title=settings.APP_NAME, version="1.0.0")
+
+allowed_origins = [
+    origin.strip()
+    for origin in settings.FRONTEND_ORIGINS.split(",")
+    if origin.strip()
+]
 
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
